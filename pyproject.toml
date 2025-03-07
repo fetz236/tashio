@@ -12,7 +12,8 @@ authors = [
   { name = "Stefanos Karathanassis", email = "stefanos.karathanassis@outlook.com" }
 ]
 dependencies = [
-  "duckdb>=0.8.1"
+  "duckdb>=0.8.1",
+  "yfinance==0.2.54"
 ]
 
 [project.optional-dependencies]
@@ -20,6 +21,9 @@ dev = [
   "pytest>=6.0",
   "ruff"
 ]
+
+[project.scripts]
+tashio-data = "tashio_data.main:main"
 
 [tool.setuptools.package-dir]
 "" = "src"

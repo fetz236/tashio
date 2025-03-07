@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tashio_data"
+version = "0.1.0"
+description = "A package to analyze Dublin property data using DuckDB."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+  { name = "Stefanos Karathanassis", email = "stefanos.karathanassis@outlook.com" }
+]
+dependencies = [
+  "duckdb>=0.8.1"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=6.0",
+  "ruff"
+]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]

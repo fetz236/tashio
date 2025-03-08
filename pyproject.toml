@@ -13,17 +13,19 @@ authors = [
 ]
 dependencies = [
   "duckdb>=0.8.1",
-  "yfinance==0.2.54"
+  "yfinance==0.2.54",
+  "boto3==1.37.8"
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest>=6.0",
-  "ruff"
+  "ruff",
+  "moto"
 ]
 
 [project.scripts]
-tashio-data = "tashio_data.main:main"
+tashio = "tashio_data.main:main"
 
 [tool.setuptools.package-dir]
 "" = "src"

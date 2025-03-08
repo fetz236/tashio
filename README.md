@@ -14,7 +14,7 @@
      pip install -e ".[dev]"
 
 3. Run the application:
-   dublin-analysis --property_csv data/dublin-property.csv --tree_json data/dublin-tree.json
+   tashio --symbol AAPL --expiration_date 2025-03-15
 
 4. Run tests:
    pytest

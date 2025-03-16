@@ -1,5 +1,3 @@
-import pytest
-import time
 from tashio_data.get_data import get_polygon_options_data, store_data_timestream
 
 def test_get_polygon_options_data(monkeypatch):

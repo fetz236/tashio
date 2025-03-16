@@ -83,3 +83,4 @@ def get_data(api_key: str, symbol: str, expiration_date: str) -> Dict[str, Any]:
             break
             
     return aggregated_data
+

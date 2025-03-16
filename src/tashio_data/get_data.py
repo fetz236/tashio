@@ -3,9 +3,7 @@ import time
 from typing import Dict, Any
 import boto3
 
-def get_polygon_options_data(
-    api_key: str, symbol: str, expiration_date: str, url: str = None
-) -> Dict[str, Any]:
+def get_polygon_options_data(api_key: str, symbol: str, expiration_date: str, url: str = None) -> Dict[str, Any]:
     """
     Fetch options contracts data from Polygon.
     If `url` is provided, it is used for pagination.
@@ -19,91 +17,69 @@ def get_polygon_options_data(
             f"&apiKey={api_key}"
         )
     response = requests.get(url)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        print(f"Error fetching data: {response.status_code}")
-        return {}
+    return response.json() if response.status_code == 200 else {}
+
+def _create_timestream_record(option: Dict[str, Any], current_time: int) -> Dict[str, Any]:
+    """Helper function to create a single Timestream record from an option."""
+    return {
+        'Dimensions': [
+            {'Name': 'OptionID', 'Value': option.get("ticker", "")},
+            {'Name': 'Underlying', 'Value': option.get("underlying_ticker", "")},
+            {'Name': 'ContractType', 'Value': option.get("contract_type", "")},
+        ],
+        'MeasureName': 'OptionMetrics',
+        'MeasureValues': [
+            {'Name': 'price', 'Value': str(option.get("strike_price", 0.0)), 'Type': 'DOUBLE'},
+            {'Name': 'volume', 'Value': str(option.get("volume", 0)), 'Type': 'BIGINT'},
+            {'Name': 'implied_volatility', 'Value': str(option.get("implied_volatility", 0.0)), 'Type': 'DOUBLE'},
+        ],
+        'Time': str(current_time),
+        'TimeUnit': 'SECONDS'
+    }
+
+def _write_batch_to_timestream(client: Any, records: list, db_name: str, table_name: str) -> None:
+    """Helper function to write a batch of records to Timestream."""
+    try:
+        client.write_records(DatabaseName=db_name, TableName=table_name, Records=records)
+        print(f"Inserted {len(records)} records to Timestream")
+    except Exception as e:
+        print(f"Error writing records: {e}")
 
 def store_data_timestream(data: Dict[str, Any], db_name: str, table_name: str) -> None:
     """
     Stores aggregated options data in Amazon Timestream using batch inserts.
     
-    Each record is written as a multi-measure record into the OptionsPrice table.
-    We assume a Timestream schema where:
-      - The primary dimension 'OptionID' (here we use the 'ticker') partitions the data.
-      - The 'Time' field (epoch in seconds, as a string) is the timestamp.
-      - MeasureValues include: price, volume, and implied_volatility.
-      
-    Note: The API response from Polygon may not include all measures (e.g. current price or volume),
-    so adjust the mapping as needed.
+    Each record is written as a multi-measure record with dimensions for OptionID,
+    Underlying, and ContractType. MeasureValues include price, volume, and implied_volatility.
     """
     client = boto3.client('timestream-write', region_name='eu-west-1')
     records = []
-    options_list = data.get("results", [])
+    current_time = int(time.time())
     
-    for option in options_list:
-        # Use the 'ticker' as the OptionID.
-        option_id = option.get("ticker", "")
-        # For demonstration, we use strike_price as a proxy for "price"
-        price = option.get("strike_price", 0.0)
-        # Use 0 if volume or implied volatility are not provided.
-        volume = option.get("volume", 0)
-        implied_vol = option.get("implied_volatility", 0.0)
+    for option in data.get("results", []):
+        records.append(_create_timestream_record(option, current_time))
         
-        # For historical data, you would parse a timestamp from the API.
-        # Here we simulate by using the current time.
-        current_time = int(time.time())
-        
-        record = {
-            'Dimensions': [
-                {'Name': 'OptionID', 'Value': option_id},
-                {'Name': 'Underlying', 'Value': option.get("underlying_ticker", "")},
-                {'Name': 'ContractType', 'Value': option.get("contract_type", "")},
-            ],
-            'MeasureName': 'OptionMetrics',  # constant for multi-measure record
-            'MeasureValues': [
-                {'Name': 'price', 'Value': str(price), 'Type': 'DOUBLE'},
-                {'Name': 'volume', 'Value': str(volume), 'Type': 'BIGINT'},
-                {'Name': 'implied_volatility', 'Value': str(implied_vol), 'Type': 'DOUBLE'},
-            ],
-            'Time': str(current_time),
-            'TimeUnit': 'SECONDS'
-        }
-        records.append(record)
-        
-        # Timestream batch API supports up to 100 records per request.
-        if len(records) == 100:
-            try:
-                client.write_records(DatabaseName=db_name, TableName=table_name, Records=records)
-                print(f"Inserted {len(records)} records to Timestream")
-            except Exception as e:
-                print(f"Error writing records: {e}")
+        if len(records) == 100:  # Timestream batch API limit
+            _write_batch_to_timestream(client, records, db_name, table_name)
             records = []
 
-    # Write any remaining records.
-    if records:
-        try:
-            client.write_records(DatabaseName=db_name, TableName=table_name, Records=records)
-            print(f"Inserted final batch of {len(records)} records to Timestream")
-        except Exception as e:
-            print(f"Error writing final records: {e}")
+    if records:  # Write any remaining records
+        _write_batch_to_timestream(client, records, db_name, table_name)
 
 def get_data(api_key: str, symbol: str, expiration_date: str) -> Dict[str, Any]:
     """
     Aggregates options data from Polygon across multiple pages for a given symbol.
     Returns a dictionary with a key "results" containing a list of option records.
     """
-    aggregated_data: Dict[str, Any] = {"results": []}
-    # Fetch the first page.
-    data = get_polygon_options_data(api_key, symbol, expiration_date)
-    aggregated_data["results"].extend(data.get("results", []))
-    next_url = data.get("next_url")
+    aggregated_data = {"results": []}
+    next_url = None
     
-    # Loop over subsequent pages if available.
-    while next_url:
+    while True:
         data = get_polygon_options_data(api_key, symbol, expiration_date, url=next_url)
         aggregated_data["results"].extend(data.get("results", []))
+        
         next_url = data.get("next_url")
-    
+        if not next_url:
+            break
+            
     return aggregated_data

@@ -13,8 +13,4 @@
    - For zsh:
      pip install -e ".[dev]"
 
-3. Run the application:
-   dublin-analysis --property_csv data/dublin-property.csv --tree_json data/dublin-tree.json
 
-4. Run tests:
-   pytest
